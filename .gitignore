@@ -1,0 +1,19 @@
+# Foundry build output and local cache
+out/
+cache/
+broadcast/
+
+# Dependencies are restored with `forge install`.
+lib/
+
+# JavaScript and TypeScript dependencies
+node_modules/
+
+# Local environment and generated deployment data
+.env
+deployments/*.json
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store
