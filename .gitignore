@@ -12,6 +12,8 @@ node_modules/
 # Local environment and generated deployment data
 .env
 deployments/*.json
+worker/state.json
+worker/state.json.tmp
 
 # Editor and operating-system files
 .idea/

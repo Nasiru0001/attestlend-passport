@@ -1,0 +1,19 @@
+{
+  "name": "attestlend-passport-relayer",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@gluwa/usc-sdk": "latest",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}
