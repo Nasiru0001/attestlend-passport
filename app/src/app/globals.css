@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+:root {
+  --ink: #10231d;
+  --paper: #f3f0e7;
+  --acid: #c9f56a;
+  --orange: #ff7043;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 15% 10%, rgba(201, 245, 106, 0.35), transparent 28rem),
+    radial-gradient(circle at 90% 80%, rgba(255, 112, 67, 0.16), transparent 30rem),
+    var(--paper);
+  font-family: var(--font-manrope), sans-serif;
+}
+
+button, input { font: inherit; }
+
+.grid-paper {
+  background-image:
+    linear-gradient(rgba(16, 35, 29, 0.055) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(16, 35, 29, 0.055) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+
+.panel {
+  border: 1px solid rgba(16, 35, 29, 0.18);
+  box-shadow: 7px 7px 0 rgba(16, 35, 29, 0.95);
+}
+
+.field {
+  width: 100%;
+  border: 1px solid rgba(16, 35, 29, 0.25);
+  background: rgba(255, 255, 255, 0.68);
+  padding: 0.7rem 0.8rem;
+  outline: none;
+}
+
+.field:focus { border-color: var(--orange); box-shadow: 0 0 0 2px rgba(255, 112, 67, 0.18); }
+
+.action {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: white;
+  padding: 0.72rem 1rem;
+  font-weight: 700;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+
+.action:hover:not(:disabled) { transform: translate(-2px, -2px); box-shadow: 3px 3px 0 var(--orange); }
+.action:disabled { cursor: not-allowed; opacity: 0.48; }
