@@ -14,7 +14,9 @@ Creditcoin.
    ```
 
 2. Copy `.env.example` to the repository root as `.env` and fill in the RPC,
-   deployed contract, source-chain start block, and relayer private key values.
+   deployed contract, and relayer private key values. `START_BLOCK` is
+   optional: when omitted on a fresh install, the worker starts at the current
+   source head minus 100.
 
 3. Start the worker from the repository root:
 
@@ -25,7 +27,13 @@ Creditcoin.
 The worker writes its restart checkpoint to `worker/state.json`. It advances
 that file only after all matching transactions in a scanned block window have
 been attested, proven, and submitted successfully. Delete the checkpoint only
-when intentionally replaying from `START_BLOCK`.
+when intentionally replaying from the resolved initial block.
+
+## RPC range limit
+
+Each `eth_getLogs` request covers at most five inclusive blocks. This is below
+the ten-block limit imposed by the free Sepolia RPC provider. `MAX_BLOCK_RANGE`
+is capped in code at five even if a larger value is supplied in `.env`.
 
 ## Important integration detail
 

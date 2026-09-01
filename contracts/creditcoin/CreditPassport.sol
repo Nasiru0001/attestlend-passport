@@ -92,9 +92,6 @@ contract CreditPassport is AttestcoinConsumer {
         address borrower = address(uint160(uint256(topics[2])));
         (address token, uint256 paymentAmount, uint256 totalRepaid, uint256 amountDue, bool fullyRepaid) =
             abi.decode(data, (address, uint256, uint256, uint256, bool));
-        token;
-        totalRepaid;
-        amountDue;
 
         uint256 currentScore = scores[borrower];
         if (currentScore == 0) currentScore = INITIAL_SCORE;

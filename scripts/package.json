@@ -5,6 +5,7 @@
   "scripts": {
     "deploy:source": "tsx deploy-source.ts",
     "deploy:creditcoin": "tsx deploy-creditcoin.ts",
+    "test:flow": "tsx test-flow.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

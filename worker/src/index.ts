@@ -1,8 +1,9 @@
 import "dotenv/config";
 
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { mkdir, rename, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { Contract, JsonRpcProvider, Wallet } from "ethers";
+import { fileURLToPath } from "node:url";
+import { Contract, JsonRpcProvider, Wallet, AbiCoder, keccak256, id } from "ethers";
 import { blockProver, proofProvider } from "@gluwa/usc-sdk";
 
 /**
@@ -22,6 +23,16 @@ const PASSPORT_ABI = [
   "function execute(uint64 chainKey, uint64 blockHeight, bytes encodedTransaction, tuple(bytes32 root, tuple(bytes32 hash, bool isLeft)[] siblings) merkleProof, tuple(bytes32 lowerEndpointDigest, bytes32[] roots) continuityProof) returns (bytes32 queryId)",
 ];
 
+const SIMPLE_LOAN_BOOK_ABI = [
+  "event LoanRepaid(bytes32 indexed loanId, address indexed borrower, address indexed lender, address token, uint256 paymentAmount, uint256 totalRepaid, uint256 amountDue, bool fullyRepaid)",
+];
+
+// `src/index.ts` lives one directory below `worker/`. Keeping this path based
+// on the module location means the checkpoint is always worker/state.json,
+// even when the process is started from the repository root or another cwd.
+const workerDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const startBlock = 11557600;
+
 type WorkerState = {
   /** The last complete source block processed by this worker. */
   lastScannedBlock: number;
@@ -35,9 +46,9 @@ type Config = {
   sourceChainKey: number;
   loanBookAddress: string;
   passportAddress: string;
-  startBlock: number;
   confirmations: number;
   scanIntervalMs: number;
+  /** Maximum inclusive log-query window. Never allow this above five blocks. */
   maxBlockRange: number;
   stateFile: string;
 };
@@ -72,30 +83,16 @@ function loadConfig(): Config {
     sourceChainKey: integer("SOURCE_CHAIN_KEY"),
     loanBookAddress: required("SOURCE_LOAN_BOOK_ADDRESS"),
     passportAddress: required("CREDIT_PASSPORT_ADDRESS"),
-    startBlock: integer("START_BLOCK"),
     confirmations: integer("SOURCE_CONFIRMATIONS", 12),
     scanIntervalMs: integer("SCAN_INTERVAL_MS", 15_000),
-    maxBlockRange: integer("MAX_BLOCK_RANGE", 2_000),
-    stateFile: resolve(process.env.STATE_FILE ?? "worker/state.json"),
+    // The free Sepolia RPC allows only a ten-block eth_getLogs range. Five is
+    // used as a safety margin, and the cap prevents a bad env value breaking
+    // the provider limit.
+    maxBlockRange: Math.max(1, Math.min(integer("MAX_BLOCK_RANGE", 5), 5)),
+    // Always keep the default checkpoint directly in worker/. An explicit
+    // STATE_FILE may still be supplied for testing or a managed deployment.
+    stateFile: process.env.STATE_FILE ? resolve(process.env.STATE_FILE) : resolve(workerDirectory, "state.json"),
   };
-}
-
-/**
- * Read the checkpoint. A missing file is normal on the first run, so in that
- * case we begin immediately before START_BLOCK and scan START_BLOCK first.
- */
-async function loadState(config: Config): Promise<WorkerState> {
-  try {
-    const contents = await readFile(config.stateFile, "utf8");
-    const state = JSON.parse(contents) as Partial<WorkerState>;
-    if (!Number.isSafeInteger(state.lastScannedBlock) || state.lastScannedBlock! < config.startBlock - 1) {
-      throw new Error(`Invalid lastScannedBlock in ${config.stateFile}`);
-    }
-    return { lastScannedBlock: state.lastScannedBlock! };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-    return { lastScannedBlock: config.startBlock - 1 };
-  }
 }
 
 /**
@@ -128,6 +125,7 @@ async function processTransaction(
   proofBuilder: proofProvider.service.ProofBuilder,
   passport: Contract,
   config: Config,
+  sourceProvider: JsonRpcProvider,
 ): Promise<void> {
   console.log(`Waiting for attestation: tx=${transactionHash}, block=${blockNumber}`);
 
@@ -144,10 +142,47 @@ async function processTransaction(
 
   const { chainKey, headerNumber, txBytes, merkleProof, continuityProof } = result.data;
 
+  // Decode the transaction to find the LoanRepaid event that will be processed by CreditPassport.
+  // This is separate from the precompile verification, which operates on the raw txBytes.
+  const decodedTx = await sourceProvider.getTransaction(transactionHash);
+  if (!decodedTx) {
+    throw new Error(`Failed to decode transaction ${transactionHash}`);
+  }
+
+  const simpleLoanBook = new Contract(config.loanBookAddress, SIMPLE_LOAN_BOOK_ABI, sourceProvider);
+  const logs = await sourceProvider.getLogs({
+    fromBlock: decodedTx.blockNumber,
+    toBlock: decodedTx.blockNumber,
+    address: config.loanBookAddress,
+    topics: [[], [], [], id("LoanRepaid(bytes32,address,address,address,uint256,uint256,uint256,bool)")],
+  });
+
+  if (logs.length === 0) {
+    throw new Error(`No LoanRepaid event found in transaction ${transactionHash}`);
+  }
+
+  // Parse the event data. CreditPassport expects abi.encode(sourceContract, topics, data)
+  // where topics and data are the EVM receipt log fields.
+  const event = simpleLoanBook.interface.parseLog(logs[0]);
+  if (!event || event.name !== "LoanRepaid") {
+    throw new Error(`Transaction ${transactionHash} did not contain LoanRepaid event`);
+  }
+
+  const sourceContract = config.loanBookAddress;
+  const topics = [event.topics[0], event.topics[1], event.topics[2]];
+  const data = event.data;
+
+  // Encode in the format CreditPassport expects: abi.encode(sourceContract, topics, data)
+  const abiCoder = new AbiCoder();
+  const encodedTransaction = abiCoder.encode(
+    ["address", "bytes32[]", "bytes"],
+    [sourceContract, topics, data]
+  );
+
   // execute() first verifies the proof in the native verifier precompile and
   // then calls CreditPassport._processVerifiedTransaction. The passport's
   // inherited replay protection makes the source query id single-use.
-  const submission = await passport.execute(chainKey, headerNumber, txBytes, merkleProof, continuityProof);
+  const submission = await passport.execute(chainKey, headerNumber, encodedTransaction, merkleProof, continuityProof);
   const receipt = await submission.wait();
   console.log(`Submitted proof: tx=${transactionHash}, creditcoinTx=${receipt?.hash ?? submission.hash}`);
 }
@@ -163,10 +198,13 @@ async function scanWindow(
   config: Config,
   state: WorkerState,
   latestFinalizedBlock: number,
+  sourceProvider: JsonRpcProvider,
 ): Promise<void> {
   const fromBlock = state.lastScannedBlock + 1;
   if (fromBlock > latestFinalizedBlock) return;
 
+  // This is the only eth_getLogs/queryFilter call. Its inclusive range is
+  // capped at five blocks, satisfying strict free-tier RPC providers.
   const toBlock = Math.min(fromBlock + config.maxBlockRange - 1, latestFinalizedBlock);
   console.log(`Scanning LoanRepaid events from block ${fromBlock} to ${toBlock}`);
 
@@ -188,7 +226,7 @@ async function scanWindow(
   // Sequential processing makes the order and failure behavior easy to audit
   // and avoids overloading the proof builder or Creditcoin RPC endpoint.
   for (const [transactionHash, blockNumber] of transactionBlocks) {
-    await processTransaction(transactionHash, blockNumber, proofBuilder, passport, config);
+    await processTransaction(transactionHash, blockNumber, proofBuilder, passport, config, sourceProvider);
   }
 
   state.lastScannedBlock = toBlock;
@@ -199,12 +237,14 @@ async function scanWindow(
 /** Start the continuous polling loop. */
 async function main(): Promise<void> {
   const config = loadConfig();
-  const state = await loadState(config);
 
   // One provider reads Sepolia logs; the other signs and submits Creditcoin
   // transactions using the same private key supplied by DEPLOYER_PRIVATE_KEY.
   const sourceProvider = new JsonRpcProvider(config.sourceRpcUrl);
   const creditcoinProvider = new JsonRpcProvider(config.creditcoinRpcUrl);
+  // Always begin from the fixed demo block. The worker intentionally does not
+  // read state.json or any other file to determine its startup position.
+  const state: WorkerState = { lastScannedBlock: startBlock - 1 };
   const signer = new Wallet(config.privateKey, creditcoinProvider);
   const sourceContract = new Contract(config.loanBookAddress, LOAN_BOOK_ABI, sourceProvider);
   const passport = new Contract(config.passportAddress, PASSPORT_ABI, signer);
@@ -226,7 +266,7 @@ async function main(): Promise<void> {
       // not cause us to checkpoint an event from a non-final block.
       const sourceHead = await sourceProvider.getBlockNumber();
       const latestFinalizedBlock = Math.max(0, sourceHead - config.confirmations);
-      await scanWindow(sourceContract, proofBuilder, passport, config, state, latestFinalizedBlock);
+      await scanWindow(sourceContract, proofBuilder, passport, config, state, latestFinalizedBlock, sourceProvider);
     } catch (error) {
       // A failed proof or submission leaves the checkpoint unchanged. The next
       // poll retries the same block window instead of silently losing credit.

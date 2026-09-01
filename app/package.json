@@ -2,28 +2,30 @@
   "name": "attestlend-passport-app",
   "private": true,
   "version": "0.1.0",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "dev": "vite",
+    "build": "tsc -b && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -b --pretty false"
   },
   "dependencies": {
-    "@tailwindcss/postcss": "^4.1.12",
+    "@rainbow-me/rainbowkit": "^2.2.11",
+    "@tanstack/react-query": "^5.102.2",
     "ethers": "^6.15.0",
-    "next": "^15.5.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
-    "tailwindcss": "^4.1.12"
+    "viem": "^2.55.19",
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3.3.1",
+    "@tailwindcss/vite": "^4.1.12",
     "@types/node": "^22.17.2",
     "@types/react": "^19.1.10",
     "@types/react-dom": "^19.1.7",
-    "eslint": "^9.34.0",
-    "eslint-config-next": "^15.5.0",
-    "typescript": "^5.9.2"
+    "@vitejs/plugin-react": "^5.0.2",
+    "tailwindcss": "^4.1.12",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.3"
   }
 }
