@@ -1,3 +1,4 @@
+import logo from './logo.png'
 type LandingProps = {
   onLaunch: () => void;
 };
@@ -26,7 +27,7 @@ export default function Landing({ onLaunch }: LandingProps) {
     <main className="grid-paper min-h-screen px-4 py-6 sm:px-8 lg:px-12 lg:py-10">
       <nav className="mx-auto flex max-w-7xl items-center justify-between border-b border-[var(--ink)] pb-5">
         <div className="flex items-center gap-3">
-          <img src="public/logo.png" alt="AttestLend" className="h-8 w-8" />
+          <img src={logo} alt="AttestLend" className="h-8 w-8" />
           <span className="text-sm font-extrabold uppercase tracking-tight">AttestLend</span>
         </div>
         <span className="font-mono text-[10px] uppercase tracking-[0.24em] text-[var(--ink)]/55">
