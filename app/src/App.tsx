@@ -10,6 +10,7 @@ import {
   parseUnits,
 } from "ethers";
 import Landing from "./Landing";
+import logo from './logo.png'
 import { useAccount, useSwitchChain, useWalletClient } from "wagmi";
 import { creditcoinTestnet } from "./wagmiConfig";
 
@@ -307,7 +308,7 @@ function Dashboard() {
     <main className="grid-paper min-h-screen px-4 py-6 sm:px-8 lg:px-12 lg:py-10">
       <header className="mx-auto flex max-w-7xl flex-col gap-6 border-b border-[var(--ink)] pb-7 sm:flex-row sm:items-end sm:justify-between">
         <div className="flex items-center gap-3">
-          <img src="public/logo.png" alt="AttestLend" className="h-8 w-8" />
+          <img src={logo} alt="AttestLend" className="h-8 w-8" />
           <div>
             <p className="mb-3 font-mono text-xs font-medium uppercase tracking-[0.28em]">Attestcoin-powered reputation</p>
             <h1 className="max-w-3xl text-5xl font-extrabold leading-[0.9] tracking-[-0.06em] sm:text-7xl">AttestLend<br/><span className="text-[var(--orange)]">Passport.</span></h1>
